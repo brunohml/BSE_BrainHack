@@ -48,7 +48,7 @@ Project directions...
 This script takes the 1024-dimensional embeddings for a given patient and performs the manifold projection to 2 dimensions using PaCMAP. It will call functions from utils/unpickler.py to achieve this, but you won't ever need to interact with unpickler.py. 
 
 Relevant command-line parameters:
-- --patient_id: specify patient to run via an integer (choices are 30, ...).
+- --patient_id: specify patient to run via an integer (choices are 27, 28, 30, 31, 33, 34, 35).
 - --all: provide instead of --patient_id to run all patients.
 - --mn_ratio: mid-near pair ratio for PaCMAP. Increasing this value places more emphasis on preserving global structure. Default = 12.0.
 - --fp_ratio: far-near pair ratio for PaCMAP. Increasing this value places more emphasis on separating clusters. Default = 1.0.
@@ -74,5 +74,15 @@ Output files:
 - tagged_pointcloud_Epat{ID}.pkl: visualizes the tagged 2D embeddings.
 
 
+## Typical worflow
 
+The way I usually work with these scripts is to run create_manifold.py with a given set of parameters that I am trying out, for example:
+
+python create_manifold.py --patient_id 30  --mn_ratio 20.0  --fp_ratio 2.0  --lr 0.1
+
+This will create manifold_Epat30_MN20_FP2_LR1_NN0.pkl and pointcloud_Epat30.png files at the directory output/Epat30.
+
+I will then run sleep_tagger.py to tag this manifold with sleep metadata, for example:
+
+python sleep_tagger.py --path manifold_Epat30_MN20_FP2_LR1_NN0.pkl
 
