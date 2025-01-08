@@ -1,12 +1,12 @@
-# Manifold Learning from High-dimensional Brain State Embeddings - BrainHack 2024
+# Manifold Learning from High-dimensional Brain State Embeddings - BrainHack 2025
 
 ## Project Background
 
-Thanks for checking this project out! Our lab collaborates with VUMC to collect intracranial EEG data from ~100 stereotactic EEG (SEEG) electrodes placed across the entire brain in patients with drug refractory epilepsy being evaluated in the epilepsy monitoring unit (EMU) prior to potential surgical intervention. These patients can remain in the EMU for up to 2 weeks, providing a rare opportunity to use SEEG data over an extended period of time to learn about not only seizure dynamics, but normal brain function.
+Thanks for checking this project out! Our lab collaborates with VUMC to collect intracranial EEG data from stereotactic EEG (SEEG) electrodes placed across the brain in patients with drug refractory epilepsy being evaluated in the epilepsy monitoring unit (EMU) prior to potential surgical intervention. These patients can remain in the EMU for up to 2 weeks, providing a rare opportunity to use intracranial EEG data over an extended period of time to learn about not only seizure dynamics, but normal brain function.
 
 However, whole-brain SEEG data proves to be very difficult to analyze due to complex, non-linear relationships in EEG activity between electrodes that evolve across multiple temporal scales. In an effort to interpret this data more effectively, our lab has developed a machine learning model that takes as input 10-second windows of whole-brain SEEG data and summarizes the patient's functional brain state during these 10 seconds as an 'embedding' in 1024-dimensional space. We thus call these 'brain state embeddings'. By feeding 10-second windows across the patient's entire EMU stay, we generate a 1024-dimensional point cloud where each point is a brain state embedding.
 
-1024 dimensions is obviously difficult to analyze, so we employ Pairwise Controlled Manifold Approximation (PaCMAP) to project the data to a lower-dimensional manifold that can be more readily analyzed. PaCMAP is a manifold learning technique conceptually similar to UMAP that more effectively preserves both local and global structure during dimensionality reduction.
+1024 dimensions is obviously difficult to work with, so we employ Pairwise Controlled Manifold Approximation (PaCMAP) to project the data to a lower-dimensional manifold that can be more readily analyzed. PaCMAP is a manifold learning technique conceptually similar to UMAP that more effectively preserves both local and global structure during dimensionality reduction.
 
 ## Sleep Stages
 
