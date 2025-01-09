@@ -8,7 +8,7 @@ However, whole-brain SEEG data proves to be very difficult to analyze due to com
 
 1024 dimensions is obviously difficult to work with, so we employ Pairwise Controlled Manifold Approximation (PaCMAP) to project the data to a lower-dimensional manifold that can be more readily analyzed. PaCMAP is a manifold learning technique conceptually similar to UMAP that more effectively preserves both local and global structure during dimensionality reduction.
 
-## Sleep Stages
+## Why Sleep Stages
 
 There are many directions for this project, but we are first interested in validating the ability to discriminate between functionally distinct brain states using this point cloud. In other words, are functionally simdilar brain states closer to each other in the point cloud than functionally dissimilar brain states? Luckily, patients naturally cycle through a series of reliably dissimilar functional brain states: sleep stages!
 
@@ -20,8 +20,19 @@ To explore this, we used a sleep stage classifier on the raw SEEG data to genera
 
 As you can see, brain state embeddings across sleep stages appear to cluster appropriately. However, we are still looking for ways to quantify this analysis - and ultimately learn something about the underlying neural dynamics of sleep. 
 
-Project directions...
+1. Sleep stage classifier:
+Although we can visualize different clusters of sleep stages based on the metadata, it would be interesting to build a classifier that categorizes brain state embeddings into sleep stages, and then compare these embedding-based categorizations to the metadata. This could be a supervised classifier that uses the metadata as labels, or an unsupervised classifier that is later compared to the metadata. Open questions include how well the classifier can perform and how the performance varies across embedding dimensions (for example, trying to classify embeddings following PaCMAP projection to 2 dimensions versus 10 dimensions).
 
+2. Feature analysis:
+The embeddings are defined by dimensions that are highly abstracted from the original SEEG data. However, it would be interesting to investigate whether a given sleep stage is particularly associated with a given set of dimensions. In other words, does our model capture unique features about a sleep stage through a specific set of dimensions, and can we identify these dimensions? We could then track this back to our original raw SEEG data to identify those features, though that would be require a more involved project.
+
+We are open to suggestions on how this could be done! One way could be to read out the dimensions that are heavily weighted by a classifier as described above, another interesting approach would be to use recently-published Structure Index (https://github.com/PridaLab/structure_index). Any insights are appreciated!
+
+3. Alternative manifold learning approaches and hyperparameter optimization:
+We have been using PaCMAP, but would be open to suggestions about better-suited manifold learning techniques or ways to get the most out of PaCMAP. 
+
+4. Any other cool manifold-based analyses:
+Our lab is new to working with manifold data. Insights regarding research directions from those with experience working with manifold data are greatly appreciated!
 
 
 # Getting started
