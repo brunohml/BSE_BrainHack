@@ -25,7 +25,6 @@ Although we can visualize different clusters of sleep stages based on the metada
 
 2. Feature analysis:
 The embeddings are defined by dimensions that are highly abstracted from the original SEEG data. However, it would be interesting to investigate whether a given sleep stage is particularly associated with a given set of dimensions. In other words, does our model capture unique features about a sleep stage through a specific set of dimensions, and can we identify these dimensions? We could then track this back to our original raw SEEG data to identify those features, though that would be require a more involved project.
-
 We are open to suggestions on how this could be done! One way could be to read out the dimensions that are heavily weighted by a classifier as described above, another interesting approach would be to use recently-published Structure Index (https://github.com/PridaLab/structure_index). Any insights are appreciated!
 
 3. Alternative manifold learning approaches and hyperparameter optimization:
