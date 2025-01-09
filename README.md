@@ -10,7 +10,7 @@ However, whole-brain SEEG data proves to be very difficult to analyze due to com
 
 ## Why Sleep Stages
 
-There are many directions for this project, but we are first interested in validating the ability to discriminate between functionally distinct brain states using this point cloud. In other words, are functionally simdilar brain states closer to each other in the point cloud than functionally dissimilar brain states? Luckily, patients naturally cycle through a series of reliably dissimilar functional brain states: sleep stages!
+There are many directions for this project, but we are first interested in validating the ability to discriminate between functionally distinct brain states using this point cloud. In other words, are functionally similar brain states closer to each other in the point cloud than functionally dissimilar brain states? Luckily, patients naturally cycle through a series of reliably dissimilar functional brain states: sleep stages!
 
 To explore this, we used a sleep stage classifier on the raw SEEG data to generate metadata about periods of the EMU stay during which the patient was in REM, NREM, and wake. We can then tag the 2-dimensional manifold to visualize whether brain state embeddings from distinct sleep stages appropriately cluster apart from each other. Here is an example:
 
