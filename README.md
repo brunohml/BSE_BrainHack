@@ -2,7 +2,7 @@
 
 ## Project Background
 
-Thanks for checking this project out! Our lab collaborates with VUMC to collect intracranial EEG data from stereotactic EEG (SEEG) electrodes placed across the brain in patients with drug refractory epilepsy being evaluated in the epilepsy monitoring unit (EMU) prior to potential surgical intervention. These patients can remain in the EMU for up to 2 weeks, providing a rare opportunity to use intracranial EEG data over an extended period of time to learn about not only seizure dynamics, but normal brain function.
+Thanks for checking this project out! Our lab collects intracranial EEG data from stereotactic EEG (SEEG) electrodes placed across the brain in patients with drug refractory epilepsy being evaluated in the epilepsy monitoring unit (EMU) prior to potential surgical intervention. These patients can remain in the EMU for up to 2 weeks, providing a rare opportunity to use intracranial EEG data over an extended period of time to learn about not only seizure dynamics, but normal brain function.
 
 However, whole-brain SEEG data proves to be very difficult to analyze due to complex, non-linear relationships in EEG activity between electrodes that evolve across multiple temporal scales. In an effort to interpret this data more effectively, our lab has developed a machine learning model that takes as input 10-second windows of whole-brain SEEG data and summarizes the patient's functional brain state during these 10 seconds as an 'embedding' in 1024-dimensional space. We thus call these 'brain state embeddings'. By feeding 10-second windows across the patient's entire EMU stay, we generate a 1024-dimensional point cloud where each point is a brain state embedding.
 
@@ -24,8 +24,8 @@ As you can see, brain state embeddings across sleep stages appear to cluster app
 Although we can visualize different clusters of sleep stages based on the metadata, it would be interesting to build a classifier that categorizes brain state embeddings into sleep stages, and then compare these embedding-based categorizations to the metadata. This could be a supervised classifier that uses the metadata as labels, or an unsupervised classifier that is later compared to the metadata. Open questions include how well the classifier can perform and how the performance varies across embedding dimensions (for example, trying to classify embeddings following PaCMAP projection to 2 dimensions versus 10 dimensions).
 
 2. Feature analysis:
-The embeddings are defined by dimensions that are highly abstracted from the original SEEG data. However, it would be interesting to investigate whether a given sleep stage is particularly associated with a given set of dimensions. In other words, does our model capture unique features about a sleep stage through a specific set of dimensions, and can we identify these dimensions? We could then track this back to our original raw SEEG data to identify those features, though that would be require a more involved project.
-We are open to suggestions on how this could be done! One way could be to read out the dimensions that are heavily weighted by a classifier as described above, another interesting approach would be to use recently-published Structure Index (https://github.com/PridaLab/structure_index). Any insights are appreciated!
+The embeddings are defined by dimensions that are highly abstracted from the original SEEG data. However, it would be interesting to investigate whether a given sleep stage is particularly associated with a given set of dimensions. In other words, does our model capture unique features about a sleep stage through a specific set of dimensions, and can we identify these dimensions? We could then track this back to our original raw SEEG data to identify those features, though that would require a more involved project.
+We are open to suggestions on how this could be done! One way could be to read out the dimensions that are heavily weighted by a classifier as described above, another interesting approach could be to use recently-published Structure Index (https://github.com/PridaLab/structure_index). Any insights are appreciated!
 
 3. Alternative manifold learning approaches and hyperparameter optimization:
 We have been using PaCMAP, but would be open to suggestions about better-suited manifold learning techniques or ways to get the most out of PaCMAP. 
@@ -36,15 +36,17 @@ Our lab is new to working with manifold data. Insights regarding research direct
 
 # Getting started
 
-1) Install Python and an IDE.
-2) Create a virtual environment.
-3) Activate virtual environment.
-4) Fork repository to your local repository, then clone this repository locally:
-- git clone [link]
-5) Use the requirements.txt file to install all necessary packages and dependencies:
+1) Install Python 3.11 and an IDE.
+2) Create a conda environment with python 3.11.
+- conda create -n [env_name] python=3.11
+3) Activate conda environment.
+- conda activate [env_name]
+4) Use the requirements.txt file to install all necessary packages and dependencies:
 - pip3 install -r requirements.txt
-6) Download the 1024-dimensional embeddings for 4 different patients as a .pkl file from this link:
-7) Make sure this file is at directory source_pickles/raw_embeddings_1024d.pkl.
+5) Download the 1024-dimensional embeddings for 7 different patients as a .pkl file from this link:
+6) Make sure this file is at directory source_pickles/raw_embeddings_1024d.pkl.
+7) Fork repository to your local repository, then clone this repository locally:
+- git clone [link]
 8) Create your own branch of this repository:
 - git checkout -b [name of your branch]
 9) Push any changes you make to your forked repo:
