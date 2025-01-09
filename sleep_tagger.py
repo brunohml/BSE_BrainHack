@@ -16,30 +16,46 @@ def get_merged_patient_dir(patient_nums):
         patient_ids = [f"Epat{num}" for num in sorted(patient_nums)]
         return "_".join(patient_ids)
 
-def setup_output_directory(patient_id):
-    """Create output directory structure for the patient."""
-    if isinstance(patient_id, list):
-        # For multiple patients, use merged directory name
-        dir_name = get_merged_patient_dir(patient_id)
-        # Use concatenated IDs for manifold filename
-        manifold_path = os.path.join('output', dir_name, f'manifold_{dir_name}.pkl')
-    else:
-        dir_name = f"Epat{patient_id}"
-        # Check for individual patient's manifold file
-        manifold_path = os.path.join('output', dir_name, f'manifold_{dir_name}.pkl')
-    
+def extract_params_from_filename(filename):
+    """Extract PaCMAP parameters from filename."""
+    try:
+        # Split the filename by '_' and find parts containing parameters
+        parts = filename.split('_')
+        mn_part = next(part for part in parts if part.startswith('MN'))
+        fp_part = next(part for part in parts if part.startswith('FP'))
+        lr_part = next(part for part in parts if part.startswith('LR'))
+        nn_part = next(part for part in parts if part.startswith('NN')).split('.')[0]  # Remove .pkl
+        
+        # Extract numeric values
+        mn_ratio = float(mn_part[2:])  # Remove 'MN'
+        fp_ratio = float(fp_part[2:])  # Remove 'FP'
+        lr = float(lr_part[2:])        # Remove 'LR'
+        nn = int(nn_part[2:])          # Remove 'NN'
+        
+        return f"_MN{mn_ratio}_FP{fp_ratio}_LR{lr}_NN{nn}"
+    except Exception as e:
+        print(f"Warning: Parameter extraction failed: {str(e)}")
+        return None
+
+def setup_output_directory(manifold_path):
+    """Setup output directory based on manifold file path."""
     if not os.path.exists(manifold_path):
-        raise FileNotFoundError(
-            f"No manifold file found at {manifold_path}. "
-            "Please run pickle_to_cloud.py first."
-        )
+        raise FileNotFoundError(f"No manifold file found at {manifold_path}")
     
-    # Create output directory (now just the patient directory)
-    output_dir = os.path.join('output', dir_name)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    # Get output directory from manifold path
+    output_dir = os.path.dirname(manifold_path)
     
     return output_dir, manifold_path
+
+def get_patient_ids_from_path(manifold_path):
+    """Extract patient IDs from manifold filename."""
+    filename = os.path.basename(manifold_path)
+    # Extract the section between 'manifold_' and '_MN'
+    patient_section = filename.split('manifold_')[1].split('_MN')[0]
+    # Split into individual Epat IDs
+    patient_ids = patient_section.split('_')
+    # Convert Epat format to integers
+    return [int(pat_id.replace('Epat', '')) for pat_id in patient_ids]
 
 def load_sleep_metadata(excel_path):
     """Load and process sleep metadata from Excel file."""
@@ -126,13 +142,19 @@ def create_visualization(points_2d, sleep_stages, patient_id, output_dir, filena
     
     return plot_path
 
-def tag_points(patient_id, sleep_data, certainty_threshold):
+def tag_points(patient_id, sleep_data, certainty_threshold, manifold_path):
     """Tag transformed points with sleep stage metadata."""
-    output_dir, patient_data_path = setup_output_directory(patient_id)
+    output_dir, _ = setup_output_directory(manifold_path)
+    
+    # Extract parameters from manifold filename
+    param_suffix = extract_params_from_filename(os.path.basename(manifold_path))
+    if not param_suffix:
+        print("Warning: Could not extract parameters from manifold filename")
+        param_suffix = ""
     
     # Load data
     print("\nLoading patient data...")
-    with open(patient_data_path, 'rb') as f:
+    with open(manifold_path, 'rb') as f:
         data = pickle.load(f)
     
     print("\nProcessing patient data...")
@@ -195,55 +217,58 @@ def tag_points(patient_id, sleep_data, certainty_threshold):
         'stop_times': data['stop_times']
     }
     
-    # Determine output filename
+    # Determine output filenames with parameters
     display_name = "_".join([f"Epat{num}" for num in unique_patients])
     tagged_data_path = os.path.join(output_dir, 
-        f'tagged_manifold_{display_name}.pkl')
+        f'tagged_manifold_{display_name}{param_suffix}.pkl')
     
     with open(tagged_data_path, 'wb') as f:
         pickle.dump(tagged_data, f)
     
-    # Create visualization
+    # Create visualization with parameters in filename
     plot_path = create_visualization(
         data['transformed_points_2d'],
         sleep_stages,
         display_name,
         output_dir,
-        f'tagged_pointcloud_{display_name}.png'
+        f'tagged_pointcloud_{display_name}{param_suffix}.png'
     )
     
     return tagged_data_path, plot_path
 
-def process_patient(patient_id, sleep_data, certainty_threshold, force_reprocess=False):
+def process_patient(manifold_path, sleep_data, certainty_threshold, force_reprocess=False):
     """Process a single patient's or merged patients' data."""
+    # Get patient IDs from manifold path
+    patient_ids = get_patient_ids_from_path(manifold_path)
+    
     # Handle both single patient and merged patients cases
-    if isinstance(patient_id, list):
+    if len(patient_ids) > 1:
         # For merged patients, check sleep data for all patients
-        patient_ids = [f"Epat{num}" for num in patient_id]
-        patient_sleep = sleep_data[sleep_data['PatID'].isin(patient_ids)]
+        patient_ids_str = [f"Epat{num}" for num in patient_ids]
+        patient_sleep = sleep_data[sleep_data['PatID'].isin(patient_ids_str)]
         if len(patient_sleep) == 0:
-            print(f"No sleep events found for any patients in {patient_ids}")
+            print(f"No sleep events found for any patients in {patient_ids_str}")
             return
         print(f"\nFound {len(patient_sleep)} total sleep events for merged patients")
     else:
         # Single patient case
-        patient_sleep = sleep_data[sleep_data['PatID'] == f"Epat{patient_id}"]
+        patient_id_str = f"Epat{patient_ids[0]}"
+        patient_sleep = sleep_data[sleep_data['PatID'] == patient_id_str]
         if len(patient_sleep) == 0:
-            print(f"No sleep events found for patient Epat{patient_id}")
+            print(f"No sleep events found for patient {patient_id_str}")
             return
-        print(f"\nFound {len(patient_sleep)} sleep events for Epat{patient_id}")
+        print(f"\nFound {len(patient_sleep)} sleep events for {patient_id_str}")
     
-    # Setup output directory and check for existing data
-    output_dir, _ = setup_output_directory(patient_id)
+    # Setup output directory and get parameter suffix
+    output_dir, _ = setup_output_directory(manifold_path)
+    param_suffix = extract_params_from_filename(os.path.basename(manifold_path))
+    if not param_suffix:
+        print("Warning: Could not extract parameters from manifold filename")
+        param_suffix = ""
     
-    # Determine filename based on single vs merged
-    if isinstance(patient_id, list):
-        merged_name = "_".join([f"Epat{num}" for num in patient_id])
-        tagged_data_path = os.path.join(output_dir, 
-            f'tagged_sleep_stages_{merged_name}_certainty{certainty_threshold:.2f}.pkl')
-    else:
-        tagged_data_path = os.path.join(output_dir, 
-            f'tagged_sleep_stages_Epat{patient_id}_certainty{certainty_threshold:.2f}.pkl')
+    # Determine output filenames
+    base_name = os.path.basename(manifold_path)
+    tagged_data_path = os.path.join(output_dir, f'tagged_{base_name}')
     
     # Check for existing data and process
     if os.path.exists(tagged_data_path) and not force_reprocess:
@@ -254,27 +279,27 @@ def process_patient(patient_id, sleep_data, certainty_threshold, force_reprocess
         # Handle both old and new data formats
         if 'sleep_stages' not in data:
             print("Found data in old format. Reprocessing...")
-            tagged_data_path, plot_path = tag_points(patient_id, sleep_data, certainty_threshold)
+            tagged_data_path, plot_path = tag_points(patient_ids, sleep_data, certainty_threshold, manifold_path)
         else:
-            # Create visualization with appropriate name
-            display_name = merged_name if isinstance(patient_id, list) else f"Epat{patient_id}"
+            # Create visualization
+            display_name = "_".join([f"Epat{num}" for num in patient_ids])
             plot_path = create_visualization(
                 data['transformed_points_2d'],
                 data['sleep_stages'],
                 display_name,
                 output_dir,
-                f'tagged_pointcloud_{display_name}.png'
+                f'tagged_pointcloud_{display_name}{param_suffix}.png'
             )
     else:
         print(f"Running tagging process...")
-        tagged_data_path, plot_path = tag_points(patient_id, sleep_data, certainty_threshold)
+        tagged_data_path, plot_path = tag_points(patient_ids, sleep_data, certainty_threshold, manifold_path)
     
     print(f"Processing complete! Files saved to {output_dir}")
 
 def main():
     parser = argparse.ArgumentParser(description='Tag brain state embeddings with sleep stage metadata.')
-    parser.add_argument('--patient_id', type=int, nargs='+',
-                      help='One or more Patient IDs as integers (e.g., 37 38) or "all" to process all patients')
+    parser.add_argument('--path', type=str, required=True,
+                      help='Path to manifold pickle file')
     parser.add_argument('--metadata', type=str, 
                       default='metadata/cleaned_sleep.xlsx',
                       help='Path to Excel file containing sleep metadata')
@@ -289,33 +314,8 @@ def main():
         # Load sleep metadata first
         sleep_data = load_sleep_metadata(args.metadata)
         
-        if len(args.patient_id) == 1 and str(args.patient_id[0]).lower() == 'all':
-            # Look for patient directories in output
-            if not os.path.exists('output'):
-                raise FileNotFoundError("output directory not found. Please run pickle_to_cloud.py first.")
-            
-            patient_dirs = [d for d in os.listdir('output') 
-                          if os.path.isdir(os.path.join('output', d))]
-            
-            print(f"\nProcessing all {len(patient_dirs)} patients...")
-            for patient_dir in patient_dirs:
-                try:
-                    # Extract patient number from directory name
-                    patient_num = int(patient_dir.replace('Epat', ''))
-                    print(f"\n=== Processing {patient_dir} ===")
-                    process_patient(patient_num, sleep_data, args.certainty, args.force)
-                except Exception as e:
-                    print(f"Error processing {patient_dir}: {e}")
-                    continue
-        else:
-            # Process either as individual patients or merged group
-            if len(args.patient_id) > 1:
-                print(f"\n=== Processing merged patients {', '.join(f'Epat{num}' for num in args.patient_id)} ===")
-                process_patient(args.patient_id, sleep_data, args.certainty, args.force)
-            else:
-                patient_id = args.patient_id[0]
-                print(f"\n=== Processing Epat{patient_id} ===")
-                process_patient(patient_id, sleep_data, args.certainty, args.force)
+        # Process the specified manifold file
+        process_patient(args.path, sleep_data, args.certainty, args.force)
             
     except Exception as e:
         print(f"\nError: {e}")

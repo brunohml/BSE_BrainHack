@@ -95,6 +95,11 @@ def apply_pacmap_and_clustering(embeddings, do_10d=False,
     
     return dim2_space, dim10_space, cluster_labels
 
+def get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors):
+    """Generate filename suffix based on parameters."""
+    nn_str = f"NN{n_neighbors}" if n_neighbors is not None else "NN0"
+    return f"_MN{mn_ratio}_FP{fp_ratio}_LR{lr}_{nn_str}"
+
 def process_single_patient(patient_id, do_10d=False,
                          mn_ratio=12.0, fp_ratio=1.0, n_neighbors=None,
                          lr=0.01):
@@ -128,8 +133,11 @@ def process_single_patient(patient_id, do_10d=False,
         plt.scatter(dim2_space[:, 0], dim2_space[:, 1], s=0.0005)
     plt.title(f'Brain State Embeddings for Patient {patient_id}\nMN={mn_ratio}, FP={fp_ratio}, n={n_neighbors}')
     
-    # Save plot
-    plot_path = os.path.join(output_dir, f'pointcloud_Epat{patient_id}.png')
+    # Generate parameter suffix for filenames
+    param_suffix = get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors)
+    
+    # Save plot with parameters in filename
+    plot_path = os.path.join(output_dir, f'pointcloud_Epat{patient_id}{param_suffix}.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -154,8 +162,8 @@ def process_single_patient(patient_id, do_10d=False,
         }
     }
     
-    # Save processed data with new filename format
-    output_path = os.path.join(output_dir, f'manifold_Epat{patient_id}.pkl')
+    # Save processed data with parameters in filename
+    output_path = os.path.join(output_dir, f'manifold_Epat{patient_id}{param_suffix}.pkl')
     with open(output_path, 'wb') as f:
         pickle.dump(output_data, f)
     
@@ -283,8 +291,12 @@ def process_merged_patients(patient_ids, do_10d=False,
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     
     plt.title(f'Brain State Embeddings for Merged Patients: {", ".join(patient_ids)}\nMN={mn_ratio}, FP={fp_ratio}, n={n_neighbors}')
+    
+    # Generate parameter suffix for filenames
+    param_suffix = get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors)
+    
     merged_name = "_".join([f"Epat{num}" for num in patient_ids])
-    plot_path = os.path.join(output_dir, f'pointcloud_{merged_name}.png')
+    plot_path = os.path.join(output_dir, f'pointcloud_{merged_name}{param_suffix}.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -308,9 +320,8 @@ def process_merged_patients(patient_ids, do_10d=False,
         }
     }
     
-    # Save processed data with new filename format
-    merged_name = "_".join([f"Epat{num}" for num in patient_ids])
-    output_path = os.path.join(output_dir, f'manifold_{merged_name}.pkl')
+    # Save processed data with parameters in filename
+    output_path = os.path.join(output_dir, f'manifold_{merged_name}{param_suffix}.pkl')
     with open(output_path, 'wb') as f:
         pickle.dump(output_data, f)
     
@@ -394,9 +405,11 @@ def process_merged_sweep(patient_ids, mn_values, fp_values, bse_version=None):
             plt.title(f'Merged Brain State Embeddings\nMN={mn_ratio}, FP={fp_ratio}')
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             
-            # Save plot
-            plot_name = f'MN{mn_ratio}_FP{fp_ratio}.png'
-            plot_path = os.path.join(sweep_dir, plot_name)
+            # Generate parameter suffix for filenames
+            param_suffix = get_param_suffix(mn_ratio, fp_ratio, 0.01, None)  # Using default lr and no n_neighbors
+            
+            # Save plot with parameters in filename
+            plot_path = os.path.join(sweep_dir, f'pointcloud_{merged_name}{param_suffix}.png')
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
             plt.close()
             

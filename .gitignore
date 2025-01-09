@@ -1,6 +1,6 @@
 # Data
 output/
-source_pickles/
+source_pickles/raw_embeddings_1024d.pkl
 metadata/
 
 #Misc
