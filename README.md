@@ -1,4 +1,4 @@
-# Manifold Learning from High-dimensional Brain State Embeddings - BrainHack 2025
+# Brain State Modeling Through High-dimensional Embeddings  - BrainHack 2025
 
 ## Project Background
 
