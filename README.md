@@ -1,4 +1,4 @@
-# Brain State Modeling Through High-dimensional Embeddings  - BrainHack 2025
+# Brain state modeling from intracranial EEG data through high-dimensional embeddings  - BrainHack 2025
 
 ## Project Background
 
