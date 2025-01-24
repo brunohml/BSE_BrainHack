@@ -46,7 +46,7 @@ Some of the most helpful contributions would be to make this code more efficient
 - conda activate [env_name]
 4) Use the requirements.txt file to install all necessary packages and dependencies:
 - pip3 install -r requirements.txt
-5) Download the 1024-dimensional embeddings for 7 different patients as a .pkl file from this link:
+5) Download the 1024-dimensional embeddings for 4 different patients as a .pkl file from this link:
 - https://drive.google.com/drive/folders/1_HqZW5WNq_69rmBpsqu-V8BuGr3kMQAB?usp=drive_link
 6) Make sure this file is in the appropriate directory: source_pickles/raw_embeddings_1024d.pkl.
 7) Fork repository to your local repository, then clone this repository locally:
@@ -64,7 +64,7 @@ Some of the most helpful contributions would be to make this code more efficient
 This script takes the 1024-dimensional embeddings for a given patient and performs the manifold projection to 2 dimensions using PaCMAP. It will call functions from utils/unpickler.py to achieve this, but you won't ever need to interact with unpickler.py. 
 
 Relevant command-line parameters:
-- --patient_id: specify patient to run via an integer (choices are 27, 28, 30, 31, 33, 34, 35).
+- --patient_id: specify patient to run via an integer (choices are 30, 31, 33, 37).
 - --all: provide instead of --patient_id to run all patients.
 - --mn_ratio: mid-near pair ratio for PaCMAP. Increasing this value places more emphasis on preserving global structure. Default = 12.0.
 - --fp_ratio: far-near pair ratio for PaCMAP. Increasing this value places more emphasis on separating clusters. Default = 1.0.
