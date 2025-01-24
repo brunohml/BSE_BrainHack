@@ -33,6 +33,9 @@ We have been using PaCMAP, but would be open to suggestions about better-suited 
 4. Any other cool manifold-based analyses:
 Our lab is new to working with manifold data. Insights regarding research directions from those with experience working with manifold data are greatly appreciated!
 
+5. Pipeline development and refinement:
+Some of the most helpful contributions would be to make this code more efficient, elaborate, and easy to interact with. Any help on that front would go a long way!
+
 
 # Getting started
 
@@ -45,7 +48,7 @@ Our lab is new to working with manifold data. Insights regarding research direct
 - pip3 install -r requirements.txt
 5) Download the 1024-dimensional embeddings for 7 different patients as a .pkl file from this link:
 - https://drive.google.com/drive/folders/1_HqZW5WNq_69rmBpsqu-V8BuGr3kMQAB?usp=drive_link
-6) Make sure this file is at directory source_pickles/raw_embeddings_1024d.pkl.
+6) Make sure this file is in the appropriate directory: source_pickles/raw_embeddings_1024d.pkl.
 7) Fork repository to your local repository, then clone this repository locally:
 - git clone [link]
 8) Create your own branch of this repository:
