@@ -48,7 +48,7 @@ Some of the most helpful contributions would be to make this code more efficient
 - pip3 install -r requirements.txt
 5) Download the 1024-dimensional embeddings for 4 different patients as a .pkl file from this link:
 - https://drive.google.com/drive/folders/1_HqZW5WNq_69rmBpsqu-V8BuGr3kMQAB?usp=drive_link
-6) Make sure this file is in the appropriate directory: source_pickles/raw_embeddings_1024d.pkl.
+6) Make sure this file is in the appropriate directory: source_pickles/1024d_embeddings.pkl.
 7) Fork repository to your local repository, then clone this repository locally:
 - git clone [link]
 8) Create your own branch of this repository:
