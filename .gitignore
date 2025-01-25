@@ -2,6 +2,8 @@
 output/
 source_pickles/
 metadata/
+logs/
+checkpoints/
 
 #Misc
 utils/__pycache__/unpickler.cpython-311.pyc
