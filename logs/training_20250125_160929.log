@@ -1,0 +1,19 @@
+2025-01-25 16:09:29,319 [INFO] Starting training with config: {
+  "data_dir": "output",
+  "log_dir": "logs",
+  "checkpoint_dir": "checkpoints",
+  "sequence_length": 10,
+  "batch_size": 32,
+  "learning_rate": 0.0001,
+  "num_epochs": 100,
+  "device": "cpu",
+  "model_dim": 1024,
+  "n_layers": 8,
+  "n_heads": 8,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15
+}
+2025-01-25 16:09:29,320 [INFO] Train patients: 4, Val patients: 1, Test patients: 2
+2025-01-25 16:09:29,379 [INFO] NumExpr defaulting to 8 threads.
+2025-01-25 16:09:31,588 [INFO] 
+Epoch 1/100
