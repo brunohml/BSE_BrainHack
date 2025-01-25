@@ -90,7 +90,8 @@ def process_single_patient(pickle_file_path, patient_id):
         'start_times': expanded_start_times,
         'stop_times': expanded_stop_times,
         'original_shape': all_latent_data.shape,
-        'sleep_labels': None
+        'sleep_labels': None,
+        'seizure_labels': None
     }
     
     output_path = os.path.join(output_dir, f'embeddings_{patient_id}.pkl')

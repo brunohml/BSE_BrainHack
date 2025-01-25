@@ -8,6 +8,11 @@ import re
 from datetime import datetime
 from glob import glob
 from pathlib import Path
+import sys
+
+# Add parent directory to Python path to import seizure_event_tagger
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from seizure_event_tagger import tag_embeddings_with_seizures
 
 def parse_timestamp(timestamp_str):
     """Parse timestamp from filename format MMDDYYYY_HHMMSSCC."""
@@ -94,6 +99,31 @@ def process_patient_files(patient_files, animal, patient_id, window_length, stri
         'original_shape': embeddings_array.shape,
         'sleep_labels': None
     }
+    
+    # Tag seizures
+    try:
+        print(f"\nTagging seizures for {patient_id}...")
+        seizure_labels = tag_embeddings_with_seizures(output_data, patient_id)
+        output_data['seizure_labels'] = seizure_labels
+        
+        # Verify seizure tagging
+        if seizure_labels is not None:
+            print("\nVerification of seizure tagging:")
+            print(f"Shape of seizure labels: {seizure_labels.shape}")
+            labeled_windows = np.sum(seizure_labels == 1)
+            print(f"Total windows with seizures: {labeled_windows}")
+            if labeled_windows > 0:
+                print("\nSample of seizure windows:")
+                seizure_indices = np.where(seizure_labels == 1)[0][:5]  # Show first 5 seizure windows
+                for idx in seizure_indices:
+                    print(f"Window {idx}:")
+                    print(f"  Start: {start_times[idx]}")
+                    print(f"  Stop: {stop_times[idx]}")
+        
+        print(f"\nSuccessfully tagged seizures for {patient_id}")
+    except Exception as e:
+        print(f"Warning: Failed to tag seizures for {patient_id}: {e}")
+        output_data['seizure_labels'] = None
     
     # Save processed data
     output_filename = f'embeddings_{patient_id}_W{window_length}_S{stride_length}_{data_type}.pkl'

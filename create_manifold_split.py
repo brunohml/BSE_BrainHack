@@ -107,7 +107,8 @@ def get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors):
 
 def process_single_patient(animal, patient_id, window_length=60, stride_length=30, 
                          data_type='train', do_10d=False, mn_ratio=12.0, 
-                         fp_ratio=1.0, n_neighbors=None, lr=0.01):
+                         fp_ratio=1.0, n_neighbors=None, lr=0.01,
+                         visualize_seizures=False):
     """Process embeddings for a single patient."""
     print("\n=== Processing Brain State Embeddings ===\n")
     output_dir = setup_output_directory(animal, patient_id)
@@ -141,15 +142,35 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
     
     # Save visualization
     plt.figure(figsize=(12, 10))
-    if do_10d:
-        plt.scatter(dim2_space[:, 0], dim2_space[:, 1], c=cluster_labels, cmap='Spectral', s=1)
-        plt.colorbar(label='Cluster')
+    
+    # Get seizure labels if they exist and visualization is requested
+    seizure_labels = None
+    if visualize_seizures and 'seizure_labels' in data:
+        seizure_labels = np.repeat(data['seizure_labels'], n_timepoints)
+        
+        # Plot non-seizure points first
+        non_seizure_mask = seizure_labels == 0
+        plt.scatter(dim2_space[non_seizure_mask, 0], 
+                   dim2_space[non_seizure_mask, 1],
+                   c='lightgray', s=1, alpha=0.5, label='Non-seizure')
+        
+        # Plot seizure points on top
+        seizure_mask = seizure_labels == 1
+        if np.any(seizure_mask):
+            plt.scatter(dim2_space[seizure_mask, 0],
+                       dim2_space[seizure_mask, 1],
+                       c='red', s=2, alpha=0.8, label='Seizure')
+            plt.legend()
     else:
-        # Create a color gradient based on time points within each file
-        colors = np.tile(np.arange(n_timepoints), n_files)
-        plt.scatter(dim2_space[:, 0], dim2_space[:, 1], 
-                   c=colors, cmap='viridis', s=1, alpha=0.5)
-        plt.colorbar(label='Timepoint within window')
+        if do_10d:
+            plt.scatter(dim2_space[:, 0], dim2_space[:, 1], c=cluster_labels, cmap='Spectral', s=1)
+            plt.colorbar(label='Cluster')
+        else:
+            # Create a color gradient based on time points within each file
+            colors = np.tile(np.arange(n_timepoints), n_files)
+            plt.scatter(dim2_space[:, 0], dim2_space[:, 1], 
+                       c=colors, cmap='viridis', s=1, alpha=0.5)
+            plt.colorbar(label='Timepoint within window')
     
     plt.title(f'Brain State Embeddings for Patient {patient_id}\nMN={mn_ratio}, FP={fp_ratio}, n={n_neighbors}')
     plt.xlabel('PaCMAP Dimension 1')
@@ -159,7 +180,8 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
     param_suffix = get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors)
     
     # Save plot with parameters in filename
-    plot_path = os.path.join(output_dir, f'pointcloud_Epat{patient_id}{param_suffix}.png')
+    plot_filename = 'tagged_pointcloud' if visualize_seizures else 'pointcloud'
+    plot_path = os.path.join(output_dir, f'{plot_filename}_Epat{patient_id}{param_suffix}.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -174,8 +196,7 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
         'start_times': np.repeat(data['start_times'], n_timepoints),
         'stop_times': np.repeat(data['stop_times'], n_timepoints),
         'original_shape': embeddings_data.shape,
-        'seizure_types': None,
-        'seizure_events': None,
+        'seizure_labels': seizure_labels,
         'pacmap_params': {
             'mn_ratio': mn_ratio,
             'fp_ratio': fp_ratio,
@@ -197,7 +218,7 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
 
 def process_all_patients(animal, window_length=60, stride_length=30, data_type='train',
                         do_10d=False, mn_ratio=12.0, fp_ratio=1.0, 
-                        n_neighbors=None, lr=0.01):
+                        n_neighbors=None, lr=0.01, visualize_seizures=False):
     """Process all patients that have embeddings files."""
     print("\n=== Processing All Patients ===\n")
     
@@ -275,14 +296,16 @@ def process_all_patients(animal, window_length=60, stride_length=30, data_type='
                                 mn_ratio=mn_ratio, 
                                 fp_ratio=fp_ratio,
                                 n_neighbors=n_neighbors, 
-                                lr=lr)
+                                lr=lr,
+                                visualize_seizures=visualize_seizures)
         except Exception as e:
             print(f"Error processing patient {patient_num}: {e}")
             continue
 
 def process_merged_patients(animal, patient_ids, window_length=60, stride_length=30, 
                           data_type='train', do_10d=False, mn_ratio=12.0, 
-                          fp_ratio=1.0, n_neighbors=None, lr=0.01):
+                          fp_ratio=1.0, n_neighbors=None, lr=0.01,
+                          visualize_seizures=False):
     """Process and merge embeddings from multiple patients."""
     print("\n=== Merging Patient Embeddings ===\n")
     
@@ -298,7 +321,8 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
         'file_indices': [],
         'window_indices': [],
         'start_times': [],
-        'stop_times': []
+        'stop_times': [],
+        'seizure_labels': []
     }
     
     # Load and merge data from each patient
@@ -328,11 +352,19 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
         merged_data['start_times'].extend(np.repeat(data['start_times'], n_timepoints))
         merged_data['stop_times'].extend(np.repeat(data['stop_times'], n_timepoints))
         
+        # Append seizure labels if they exist
+        if 'seizure_labels' in data and data['seizure_labels'] is not None:
+            seizure_labels = np.repeat(data['seizure_labels'], n_timepoints)
+        else:
+            seizure_labels = np.zeros(n_files * n_timepoints, dtype=int)
+        merged_data['seizure_labels'].extend(seizure_labels)
+        
         total_files += n_files
         print(f"Added {n_files * n_timepoints} points")
     
     # Convert lists to arrays where appropriate
     merged_data['patient_embeddings'] = np.vstack(merged_data['patient_embeddings'])
+    merged_data['seizure_labels'] = np.array(merged_data['seizure_labels'])
     print(f"\nTotal merged embeddings shape: {merged_data['patient_embeddings'].shape}")
     
     # Apply PaCMAP and clustering
@@ -348,7 +380,22 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
     
     # Save visualization
     plt.figure(figsize=(12, 10))
-    if do_10d:
+    
+    if visualize_seizures:
+        # Plot non-seizure points first
+        non_seizure_mask = merged_data['seizure_labels'] == 0
+        plt.scatter(dim2_space[non_seizure_mask, 0], 
+                   dim2_space[non_seizure_mask, 1],
+                   c='lightgray', s=1, alpha=0.5, label='Non-seizure')
+        
+        # Plot seizure points on top
+        seizure_mask = merged_data['seizure_labels'] == 1
+        if np.any(seizure_mask):
+            plt.scatter(dim2_space[seizure_mask, 0],
+                       dim2_space[seizure_mask, 1],
+                       c='red', s=2, alpha=0.8, label='Seizure')
+            plt.legend()
+    elif do_10d:
         plt.scatter(dim2_space[:, 0], dim2_space[:, 1], c=cluster_labels, cmap='Spectral', s=1)
         plt.colorbar(label='Cluster')
     else:
@@ -374,7 +421,9 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
     # Generate parameter suffix for filenames
     param_suffix = get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors)
     
-    plot_path = os.path.join(output_dir, f'pointcloud_{merged_name}{param_suffix}.png')
+    # Save plot with parameters in filename
+    plot_filename = 'tagged_pointcloud' if visualize_seizures else 'pointcloud'
+    plot_path = os.path.join(output_dir, f'{plot_filename}_{merged_name}{param_suffix}.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -388,8 +437,7 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
         'window_indices': merged_data['window_indices'],
         'start_times': merged_data['start_times'],
         'stop_times': merged_data['stop_times'],
-        'seizure_types': None,
-        'seizure_events': None,
+        'seizure_labels': merged_data['seizure_labels'],
         'pacmap_params': {
             'mn_ratio': mn_ratio,
             'fp_ratio': fp_ratio,
@@ -431,6 +479,8 @@ def main():
                       help='PaCMAP FP_ratio parameter (default: 1.0)')
     parser.add_argument('--lr', type=float, default=0.01,
                       help='Learning rate for PaCMAP optimization (default: 0.01)')
+    parser.add_argument('--visualize_seizures', action='store_true',
+                      help='Color code points based on seizure labels')
     
     args = parser.parse_args()
     
@@ -443,7 +493,8 @@ def main():
         'mn_ratio': args.mn_ratio,
         'fp_ratio': args.fp_ratio,
         'n_neighbors': args.n_neighbors,
-        'lr': args.lr
+        'lr': args.lr,
+        'visualize_seizures': args.visualize_seizures
     }
     
     try:
