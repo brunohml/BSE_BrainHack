@@ -65,7 +65,7 @@ def apply_pacmap_and_clustering(embeddings, do_10d=False,
         lr: learning rate for PaCMAP optimization
         
     Returns:
-        tuple of (2D embeddings, 10D embeddings if do_10d=True else None, cluster labels if do_10d=True else None)
+        tuple of (2D embeddings, 10D embeddings if do_10d=True else None, cluster labels if do_10d=True else None, pacmap_2d instance)
     """
     # Prepare PaCMAP parameters
     pacmap_params = {
@@ -98,7 +98,7 @@ def apply_pacmap_and_clustering(embeddings, do_10d=False,
     pacmap_2d = PaCMAP(**pacmap_params)
     dim2_space = pacmap_2d.fit_transform(embeddings)
     
-    return dim2_space, dim10_space, cluster_labels
+    return dim2_space, dim10_space, cluster_labels, pacmap_2d
 
 def get_param_suffix(mn_ratio, fp_ratio, lr, n_neighbors):
     """Generate filename suffix based on parameters."""
@@ -130,7 +130,7 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
     print(f"Reshaped embeddings: {embeddings_flat.shape}")
     
     # Apply PaCMAP and clustering
-    dim2_space, dim10_space, cluster_labels = apply_pacmap_and_clustering(
+    dim2_space, dim10_space, cluster_labels, pacmap_2d = apply_pacmap_and_clustering(
         embeddings_flat, do_10d=do_10d,
         mn_ratio=mn_ratio, fp_ratio=fp_ratio, n_neighbors=n_neighbors,
         lr=lr
@@ -205,7 +205,8 @@ def process_single_patient(animal, patient_id, window_length=60, stride_length=3
             'window_length': window_length,
             'stride_length': stride_length,
             'data_type': data_type
-        }
+        },
+        'pacmap_instance': pacmap_2d  # Save the PaCMAP instance
     }
     
     # Save processed data with parameters in filename
@@ -368,7 +369,7 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
     print(f"\nTotal merged embeddings shape: {merged_data['patient_embeddings'].shape}")
     
     # Apply PaCMAP and clustering
-    dim2_space, dim10_space, cluster_labels = apply_pacmap_and_clustering(
+    dim2_space, dim10_space, cluster_labels, pacmap_2d = apply_pacmap_and_clustering(
         merged_data['patient_embeddings'], do_10d=do_10d,
         mn_ratio=mn_ratio, fp_ratio=fp_ratio, n_neighbors=n_neighbors,
         lr=lr
@@ -446,7 +447,8 @@ def process_merged_patients(animal, patient_ids, window_length=60, stride_length
             'window_length': window_length,
             'stride_length': stride_length,
             'data_type': data_type
-        }
+        },
+        'pacmap_instance': pacmap_2d  # Save the PaCMAP instance
     }
     
     # Save processed data with parameters in filename

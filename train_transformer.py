@@ -5,6 +5,7 @@ import pickle
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import AdamW
 from torch.nn import MSELoss
+import torch.nn.utils as utils
 from pathlib import Path
 from glob import glob
 import random
@@ -12,6 +13,7 @@ from Transformer import Transformer, ModelArgs
 import logging
 import json
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 def collate_fn(batch):
     """Custom collate function to handle sequences and labels."""
@@ -37,12 +39,20 @@ class BrainStateDataset(Dataset):
         self.sequence_length = sequence_length
         self.data = []
         self.seizure_labels = []
+        self.embedding_dim = None  # Will be set from the data
         
         for file_path in embeddings_files:
             with open(file_path, 'rb') as f:
                 data = pickle.load(f)
                 
             embeddings = data['patient_embeddings']  # Shape: (n_files, n_timepoints, n_features)
+            
+            # Set embedding dimension if not set
+            if self.embedding_dim is None:
+                self.embedding_dim = embeddings.shape[-1]
+            elif self.embedding_dim != embeddings.shape[-1]:
+                raise ValueError(f"Inconsistent embedding dimensions across files: {self.embedding_dim} vs {embeddings.shape[-1]}")
+                
             seizure_labels = data.get('seizure_labels', None)
             
             # Flatten the first two dimensions (files and timepoints)
@@ -128,7 +138,14 @@ def get_embeddings_files(data_dir, patient_ids):
         files.extend(glob(pattern))
     return files
 
-def train_epoch(model, train_loader, optimizer, criterion, device):
+def check_nan_loss(loss, epoch, batch_idx):
+    """Check if loss is NaN and log relevant information."""
+    if torch.isnan(loss):
+        logging.error(f"NaN loss detected at epoch {epoch}, batch {batch_idx}")
+        return True
+    return False
+
+def train_epoch(model, train_loader, optimizer, criterion, device, epoch, max_grad_norm=1.0):
     model.train()
     total_loss = 0
     
@@ -148,9 +165,17 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
         # Calculate loss (predicting next timestep)
         loss = criterion(output[:, :-1, :], sequences[:, 1:, :])
         
+        # Check for NaN loss
+        if check_nan_loss(loss, epoch, batch_idx):
+            return float('nan')
+        
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
+        
+        # Clip gradients
+        utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        
         optimizer.step()
         
         total_loss += loss.item() * batch_size
@@ -158,14 +183,15 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
         if batch_idx % 100 == 0:
             logging.info(f'Batch {batch_idx}/{len(train_loader)}, Loss: {loss.item():.6f}')
     
-    return total_loss / len(train_loader.dataset)
+    avg_loss = total_loss / len(train_loader.dataset)
+    return avg_loss
 
 def validate(model, val_loader, criterion, device):
     model.eval()
     total_loss = 0
     
     with torch.no_grad():
-        for batch in val_loader:
+        for batch_idx, batch in enumerate(val_loader):
             if isinstance(batch, tuple):
                 sequences, labels = batch
             else:
@@ -175,8 +201,29 @@ def validate(model, val_loader, criterion, device):
             sequences = sequences.to(device)
             batch_size = sequences.size(0)
             
+            # Debug logging
+            if batch_idx == 0:  # Log first batch stats
+                logging.info(f"Validation batch stats - Shape: {sequences.shape}, Mean: {sequences.mean():.6f}, Std: {sequences.std():.6f}")
+                logging.info(f"Range - Min: {sequences.min():.6f}, Max: {sequences.max():.6f}")
+            
+            # Forward pass
             output = model(sequences)
+            
+            # Debug output stats
+            if batch_idx == 0:  # Log first batch output stats
+                logging.info(f"Model output stats - Shape: {output.shape}, Mean: {output.mean():.6f}, Std: {output.std():.6f}")
+                logging.info(f"Output range - Min: {output.min():.6f}, Max: {output.max():.6f}")
+            
+            # Calculate loss (predicting next timestep)
             loss = criterion(output[:, :-1, :], sequences[:, 1:, :])
+            
+            if torch.isnan(loss):
+                logging.error(f"NaN loss in validation batch {batch_idx}")
+                logging.error(f"Loss components - MSE inputs:")
+                logging.error(f"Pred shape: {output[:, :-1, :].shape}, Target shape: {sequences[:, 1:, :].shape}")
+                logging.error(f"Pred stats - Mean: {output[:, :-1, :].mean():.6f}, Std: {output[:, :-1, :].std():.6f}")
+                logging.error(f"Target stats - Mean: {sequences[:, 1:, :].mean():.6f}, Std: {sequences[:, 1:, :].std():.6f}")
+                continue
             
             total_loss += loss.item() * batch_size
     
@@ -202,27 +249,60 @@ def save_checkpoint(model, optimizer, epoch, loss, checkpoint_dir, is_best=False
         best_path = os.path.join(checkpoint_dir, 'best_model.pt')
         torch.save(checkpoint, best_path)
 
+def count_parameters(model):
+    """Count the number of trainable parameters in the model."""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def plot_losses(train_losses, val_losses, save_dir):
+    """Plot training and validation losses."""
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_losses, label='Training Loss')
+    plt.plot(val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Losses')
+    plt.legend()
+    plt.grid(True)
+    
+    # Save plot
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    plt.savefig(os.path.join(save_dir, f'loss_plot_{timestamp}.png'))
+    plt.close()
+
 def main():
     # Training settings
     config = {
         'data_dir': 'output',
         'log_dir': 'logs',
         'checkpoint_dir': 'checkpoints',
+        'plot_dir': 'training_plots',
         'sequence_length': 10,
         'batch_size': 32,
         'learning_rate': 1e-4,
-        'num_epochs': 100,
-        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'model_dim': 512,  # Match the embedding dimension
+        'num_epochs': 50,
+        'device': 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'),
         'n_layers': 8,
         'n_heads': 8,
         'train_ratio': 0.7,
-        'val_ratio': 0.15
+        'val_ratio': 0.15,
+        'max_grad_norm': 1.0
     }
     
     # Setup logging
     log_file = setup_logging(config['log_dir'])
     logging.info(f"Starting training with config: {json.dumps(config, indent=2)}")
+    
+    # Log device info
+    logging.info(f"Using device: {config['device']}")
+    if config['device'] == 'cuda':
+        logging.info(f"CUDA device: {torch.cuda.get_device_name(0)}")
+        logging.info(f"CUDA device count: {torch.cuda.device_count()}")
+    elif config['device'] == 'mps':
+        logging.info("Metal Performance Shaders (MPS) backend is being used for GPU acceleration")
+    else:
+        logging.info("Running on CPU")
     
     # Split patients
     train_ids, val_ids, test_ids = split_patients(
@@ -241,6 +321,10 @@ def main():
     train_dataset = BrainStateDataset(train_files, config['sequence_length'])
     val_dataset = BrainStateDataset(val_files, config['sequence_length'])
     test_dataset = BrainStateDataset(test_files, config['sequence_length'])
+    
+    # Get embedding dimension from dataset
+    config['model_dim'] = train_dataset.embedding_dim
+    logging.info(f"Using embedding dimension from data: {config['model_dim']}")
     
     # Create data loaders with custom collate function
     train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], 
@@ -261,21 +345,39 @@ def main():
     )
     
     model = Transformer(model_args).to(config['device'])
+    
+    # Log model parameters
+    n_params = count_parameters(model)
+    logging.info(f"Number of trainable parameters: {n_params:,}")
+    
     optimizer = AdamW(model.parameters(), lr=config['learning_rate'])
     criterion = MSELoss()
     
     # Training loop
     best_val_loss = float('inf')
+    train_losses = []
+    val_losses = []
+    
     for epoch in range(config['num_epochs']):
         logging.info(f"\nEpoch {epoch + 1}/{config['num_epochs']}")
         
         # Train
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, config['device'])
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, 
+                               config['device'], epoch, config['max_grad_norm'])
+        
+        # Check for NaN loss
+        if np.isnan(train_loss):
+            logging.error("Training stopped due to NaN loss")
+            break
+            
+            
         logging.info(f"Training Loss: {train_loss:.6f}")
+        train_losses.append(train_loss)
         
         # Validate
         val_loss = validate(model, val_loader, criterion, config['device'])
         logging.info(f"Validation Loss: {val_loss:.6f}")
+        val_losses.append(val_loss)
         
         # Save checkpoint
         is_best = val_loss < best_val_loss
@@ -287,7 +389,13 @@ def main():
             model, optimizer, epoch, val_loss,
             config['checkpoint_dir'], is_best
         )
+        
+        # Plot losses every 5 epochs
+        if (epoch + 1) % 5 == 0:
+            plot_losses(train_losses, val_losses, config['plot_dir'])
     
+    # Final loss plot
+    plot_losses(train_losses, val_losses, config['plot_dir'])
     logging.info("Training completed!")
 
 if __name__ == "__main__":

@@ -364,19 +364,19 @@ class Transformer(nn.Module):
         self.freqs_cis = self.freqs_cis.to(self.device).detach()
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
-        mask = None
         if seqlen > 1:
+            # Create causal mask of shape (1, 1, seqlen, seqlen)
             mask = torch.full((seqlen, seqlen), float("-inf"), device=self.device)
-
             mask = torch.triu(mask, diagonal=1)
-
-            # When performing key-value caching, we compute the attention scores
-            # only for the new sequence. Thus, the matrix of scores is of size
-            # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-            # j > cache_len + i, since row i corresponds to token cache_len + i.
-            mask = torch.hstack(
-                [torch.zeros((seqlen, start_pos), device=self.device), mask]
-            ).type_as(h)
+            # Reshape mask for broadcasting across batch size and heads
+            mask = mask.unsqueeze(0).unsqueeze(0)
+            
+            # When using start_pos (for caching), adjust mask
+            if start_pos > 0:
+                mask = torch.hstack([
+                    torch.zeros((1, 1, seqlen, start_pos), device=self.device),
+                    mask
+                ])
 
             # Apply attention dropout
             if attention_dropout > 0:
