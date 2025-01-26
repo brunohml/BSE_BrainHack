@@ -4,6 +4,7 @@ source_pickles/
 metadata/
 logs/
 checkpoints/
+training_plots/
 
 #Misc
 utils/__pycache__/unpickler.cpython-311.pyc

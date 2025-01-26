@@ -26,8 +26,8 @@ def load_best_model(checkpoint_dir, model_args):
     
     return model
 
-def get_random_sequence(embeddings, sequence_length=10, trajectory_length=50):
-    """Get a random sequence of consecutive embeddings including context."""
+def get_random_sequence(embeddings, data, sequence_length=10, trajectory_length=50):
+    """Get a random sequence of consecutive embeddings that ends in a seizure state."""
     print(f"Embeddings shape before processing: {embeddings.shape}")
     
     # If embeddings are (n_timepoints, batch_size, feature_dim)
@@ -47,17 +47,40 @@ def get_random_sequence(embeddings, sequence_length=10, trajectory_length=50):
             f"+ trajectory ({trajectory_length}). Need at least {total_needed}."
         )
     
-    # Random starting point that allows for context
-    start_idx = random.randint(sequence_length, len(embeddings) - trajectory_length)
+    # Get seizure labels from data
+    seizure_labels = data.get('seizure_labels', None)
+    
+    if seizure_labels is None:
+        raise ValueError("No seizure labels found in the data. Please run seizure tagging first.")
+    
+    # Find all indices where seizures occur
+    seizure_indices = np.where(seizure_labels == 1)[0]
+    
+    if len(seizure_indices) == 0:
+        raise ValueError("No seizure states found in the data.")
+    
+    # Filter seizure indices to those that have enough context before them
+    valid_indices = [idx for idx in seizure_indices if idx >= sequence_length and idx + trajectory_length <= len(embeddings)]
+    
+    if not valid_indices:
+        raise ValueError(
+            f"No seizure states found with sufficient context ({sequence_length} windows) "
+            f"and trajectory length ({trajectory_length} windows)."
+        )
+    
+    # Randomly select one of the valid seizure indices
+    end_idx = random.choice(valid_indices)
+    start_idx = end_idx - sequence_length
     
     # Get context (preceding states) and trajectory separately
-    context = embeddings[start_idx - sequence_length:start_idx]  # states before
-    trajectory = embeddings[start_idx:start_idx + trajectory_length]  # states to predict
+    context = embeddings[start_idx:end_idx]  # states before
+    trajectory = embeddings[end_idx:end_idx + trajectory_length]  # states including and after seizure
     
     print(f"Context sequence shape: {context.shape}")
     print(f"Target trajectory shape: {trajectory.shape}")
+    print(f"Selected sequence ends at index {end_idx} which is a seizure state")
     
-    return context, trajectory, start_idx
+    return context, trajectory, end_idx
 
 def predict_trajectory(model, context_sequence, device, n_steps=50):
     """Generate predicted trajectory using the model."""
@@ -103,16 +126,17 @@ def predict_trajectory(model, context_sequence, device, n_steps=50):
     print(f"Final predictions shape: {predictions.shape}")
     return predictions
 
-def plot_trajectories(actual_trajectory, predicted_trajectory, manifold_data, start_time, end_time, original_embeddings):
+def plot_trajectories(actual_trajectory, predicted_trajectory, manifold_data, start_time, end_time, original_embeddings, no_pred=False):
     """Plot actual and predicted trajectories.
     
     Args:
         actual_trajectory: numpy array of shape (trajectory_length, feature_dim)
-        predicted_trajectory: numpy array of shape (trajectory_length, feature_dim)
+        predicted_trajectory: numpy array of shape (trajectory_length, feature_dim) or None if no_pred=True
         manifold_data: dictionary containing manifold data including PACMAP parameters
         start_time: datetime object for the start of the trajectory
         end_time: datetime object for the end of the trajectory
         original_embeddings: numpy array of original embeddings to use as reference
+        no_pred: if True, only plot actual trajectory
     """
     print("Starting visualization process...")
     
@@ -121,7 +145,7 @@ def plot_trajectories(actual_trajectory, predicted_trajectory, manifold_data, st
         n_components=2,
         MN_ratio=12.0,
         FP_ratio=1.0,
-        distance='angular',
+        distance='angular',  # Explicitly using angular distance
         verbose=True,
         lr=0.01
     )
@@ -132,22 +156,26 @@ def plot_trajectories(actual_trajectory, predicted_trajectory, manifold_data, st
         original_embeddings = original_embeddings.reshape(-1, n_features)
     print(f"Original embeddings shape: {original_embeddings.shape}")
     
-    # Combine all data: original embeddings first, then trajectories
-    all_data = np.vstack([original_embeddings, actual_trajectory, predicted_trajectory])
-    print(f"Combined data shape: {all_data.shape}")
+    # First, fit PACMAP on original embeddings only
+    print("Fitting PACMAP on original embeddings...")
+    background_2d = pacmap.fit_transform(original_embeddings)
+    print("PACMAP fit complete")
     
-    # Fit and transform all data
-    print("Performing PACMAP dimensionality reduction...")
-    all_2d = pacmap.fit_transform(all_data)
-    print("PACMAP reduction complete")
-    
-    print("Processing data for visualization...")
-    # Split back into components
-    n_orig = len(original_embeddings)
-    n_traj = len(actual_trajectory)
-    actual_2d = all_2d[n_orig:n_orig + n_traj]
-    predicted_2d = all_2d[n_orig + n_traj:]
-    background_2d = all_2d[:n_orig]
+    # Now transform the trajectories using the fitted model
+    print("Transforming trajectories with fitted PACMAP...")
+    if no_pred:
+        # Only transform actual trajectory
+        actual_2d = pacmap.transform(actual_trajectory, basis=original_embeddings)
+        predicted_2d = None
+    else:
+        # Combine trajectories for a single transform call
+        trajectories = np.vstack([actual_trajectory, predicted_trajectory])
+        # Transform with original embeddings as basis
+        transformed = pacmap.transform(trajectories, basis=original_embeddings)
+        # Split back into actual and predicted
+        actual_2d = transformed[:len(actual_trajectory)]
+        predicted_2d = transformed[len(actual_trajectory):]
+    print("Trajectory transformation complete")
     
     # Create time points for x-axis
     time_points = pd.date_range(start=start_time, end=end_time, periods=len(actual_trajectory))
@@ -161,18 +189,33 @@ def plot_trajectories(actual_trajectory, predicted_trajectory, manifold_data, st
     ax1.scatter(background_2d[:, 0], background_2d[:, 1], c='lightgrey', s=1, alpha=0.1, label='All States')
     
     print("Plotting trajectories...")
-    # Plot actual trajectory in red and predicted in green
-    ax1.plot(predicted_2d[:, 0], predicted_2d[:, 1], 'g-', label='Predicted Trajectory', alpha=0.7, linewidth=2)
+    # Plot actual trajectory in red
     ax1.plot(actual_2d[:, 0], actual_2d[:, 1], 'r-', label='Actual Trajectory', alpha=0.7, linewidth=2)
+    
+    if not no_pred:
+        # Plot predicted trajectory in green
+        ax1.plot(predicted_2d[:, 0], predicted_2d[:, 1], 'g-', label='Predicted Trajectory', alpha=0.7, linewidth=2)
+        ax1.scatter(predicted_2d[0, 0], predicted_2d[0, 1], c='green', s=100, marker='*', zorder=5)
+    
+    # Highlight seizure onset point
+    ax1.scatter(actual_2d[0, 0], actual_2d[0, 1], c='red', s=100, marker='*', label='Seizure Onset', zorder=5)
+    
     ax1.set_title('Brain State Trajectories in 2D Space')
     ax1.legend()
     
     print("Plotting time evolution...")
-    # Plot trajectories over time
-    ax2.plot(time_points, predicted_2d[:, 0], 'g-', label='Predicted X', alpha=0.7)
-    ax2.plot(time_points, predicted_2d[:, 1], 'g--', label='Predicted Y', alpha=0.7)
+    # Plot actual trajectory over time
     ax2.plot(time_points, actual_2d[:, 0], 'r-', label='Actual X', alpha=0.7)
     ax2.plot(time_points, actual_2d[:, 1], 'r--', label='Actual Y', alpha=0.7)
+    
+    if not no_pred:
+        # Plot predicted trajectory over time
+        ax2.plot(time_points, predicted_2d[:, 0], 'g-', label='Predicted X', alpha=0.7)
+        ax2.plot(time_points, predicted_2d[:, 1], 'g--', label='Predicted Y', alpha=0.7)
+    
+    # Highlight seizure onset point in time plot
+    ax2.axvline(x=time_points[0], color='purple', linestyle='--', label='Seizure Onset', alpha=0.5)
+    
     ax2.set_title('Brain State Coordinates Over Time')
     ax2.legend()
     
@@ -217,6 +260,22 @@ def get_test_patients(data_dir, train_ratio=0.7, val_ratio=0.15):
     
     return test_ids
 
+def get_model_layers_from_checkpoint(checkpoint_path):
+    """Determine the number of layers in the model from the checkpoint."""
+    checkpoint = torch.load(checkpoint_path)
+    state_dict = checkpoint['model_state_dict']
+    
+    # Find all unique layer numbers in the state dict keys
+    layer_numbers = set()
+    for key in state_dict.keys():
+        if key.startswith('layers.'):
+            layer_num = int(key.split('.')[1])
+            layer_numbers.add(layer_num)
+    
+    # The number of layers is the maximum layer number + 1 (since we start counting at 0)
+    n_layers = max(layer_numbers) + 1
+    return n_layers
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Visualize brain state trajectories using trained model')
@@ -245,6 +304,8 @@ def main():
                       help='Stride length in seconds (default: 30)')
     parser.add_argument('--data_type', type=str, default='train',
                       help='Data type (train/test/val) (default: train)')
+    parser.add_argument('--no_pred', action='store_true',
+                      help='Skip predictions and only visualize actual trajectories')
     
     args = parser.parse_args()
     
@@ -254,29 +315,8 @@ def main():
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
     
-    # Configuration
-    config = {
-        'data_dir': args.data_dir,
-        'checkpoint_dir': os.path.dirname(args.model_path),
-        'sequence_length': args.sequence_length,
-        'trajectory_length': args.trajectory_length,
-        'model_dim': 512,
-        'n_layers': 8,
-        'n_heads': 8,
-        'device': 'mps' if torch.backends.mps.is_available() else 'cpu',
-        'batch_size': 1,
-        'train_ratio': args.train_ratio,
-        'val_ratio': args.val_ratio,
-        'animal': args.animal,
-        'window_length': args.window_length,
-        'stride_length': args.stride_length,
-        'data_type': args.data_type
-    }
-    
     # Get test patient IDs
-    test_ids = get_test_patients(config['data_dir'], 
-                               config['train_ratio'], 
-                               config['val_ratio'])
+    test_ids = get_test_patients(args.data_dir, args.train_ratio, args.val_ratio)
     print(f"Available test patients: {test_ids}")
     
     # Select patient
@@ -290,18 +330,18 @@ def main():
     else:
         patient_id = random.choice(test_ids)
     
-    patient_dir = os.path.join(config['data_dir'], config['animal'], f'Epat{patient_id}')
+    patient_dir = os.path.join(args.data_dir, args.animal, f'Epat{patient_id}')
     print(f"\nProcessing test patient {patient_id}")
     
     # Load embeddings with correct file pattern
     embeddings_path = os.path.join(
         patient_dir, 
-        f'embeddings_Epat{patient_id}_W{config["window_length"]}_S{config["stride_length"]}_{config["data_type"]}.pkl'
+        f'embeddings_Epat{patient_id}_W{args.window_length}_S{args.stride_length}_{args.data_type}.pkl'
     )
     if not os.path.exists(embeddings_path):
         raise FileNotFoundError(
             f"Embeddings file not found at {embeddings_path}. "
-            f"Expected file pattern: embeddings_Epat{patient_id}_W{config['window_length']}_S{config['stride_length']}_{config['data_type']}.pkl"
+            f"Expected file pattern: embeddings_Epat{patient_id}_W{args.window_length}_S{args.stride_length}_{args.data_type}.pkl"
         )
         
     print(f"Loading embeddings from {embeddings_path}")
@@ -333,46 +373,54 @@ def main():
     points_2d = manifold_data['transformed_points_2d']
     print(f"Loaded 2D points with shape: {points_2d.shape}")
     
-    # Initialize model arguments
-    model_args = ModelArgs(
-        dim=config['model_dim'],
-        n_layers=config['n_layers'],
-        n_heads=config['n_heads'],
-        max_batch_size=config['batch_size'],
-        max_seq_len=config['sequence_length'],
-        device=config['device']
-    )
-    
-    # Load specified model checkpoint
-    model = Transformer(model_args)
-    checkpoint = torch.load(args.model_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model = model.to(config['device'])
-    model.eval()
-    
-    print(f"Loaded model from {args.model_path}")
-    print(f"Model checkpoint was from epoch {checkpoint['epoch']} with loss {checkpoint['loss']:.6f}")
-    
     # Get random sequence with context
-    context, trajectory, start_idx = get_random_sequence(
-        embeddings, 
-        sequence_length=config['sequence_length'],
-        trajectory_length=config['trajectory_length']
+    context, trajectory, end_idx = get_random_sequence(
+        embeddings, data,
+        sequence_length=args.sequence_length,
+        trajectory_length=args.trajectory_length
     )
     
-    # Generate predictions
-    predicted_sequence = predict_trajectory(
-        model, context, config['device'], config['trajectory_length']
-    )
+    # Generate predictions only if not using --no_pred
+    if not args.no_pred:
+        # Get number of layers from checkpoint
+        n_layers = get_model_layers_from_checkpoint(args.model_path)
+        print(f"Detected {n_layers} layers in the model checkpoint")
+        
+        # Initialize model arguments
+        model_args = ModelArgs(
+            dim=512,
+            n_layers=n_layers,
+            n_heads=8,
+            max_batch_size=1,
+            max_seq_len=args.sequence_length,
+            device='mps' if torch.backends.mps.is_available() else 'cpu'
+        )
+        
+        # Load specified model checkpoint
+        model = Transformer(model_args)
+        checkpoint = torch.load(args.model_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(model_args.device)
+        model.eval()
+        
+        print(f"Loaded model from {args.model_path}")
+        print(f"Model checkpoint was from epoch {checkpoint['epoch']} with loss {checkpoint['loss']:.6f}")
+        
+        # Generate predictions
+        predicted_sequence = predict_trajectory(
+            model, context, model_args.device, args.trajectory_length
+        )
+    else:
+        predicted_sequence = None
     
     # Get the corresponding start and end times for this sequence
-    start_time = pd.to_datetime(data['start_times'][start_idx])
-    end_time = pd.to_datetime(data['stop_times'][start_idx + config['trajectory_length'] - 1])
+    start_time = pd.to_datetime(data['start_times'][end_idx - args.sequence_length])
+    end_time = pd.to_datetime(data['stop_times'][end_idx + args.trajectory_length - 1])
     
     # Plot trajectories
     plot_trajectories(
         trajectory, predicted_sequence, manifold_data,
-        start_time, end_time, embeddings
+        start_time, end_time, embeddings, no_pred=args.no_pred
     )
     
     print(f"Visualization completed")

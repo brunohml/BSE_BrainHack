@@ -80,6 +80,8 @@ def process_patient_files(patient_files, animal, patient_id, window_length, stri
         # Load embedding
         with open(file_path, 'rb') as f:
             embedding = pickle.load(f)
+            if len(all_embeddings) == 0:  # Only log for first file
+                print(f"\nShape of single file embedding: {np.array(embedding).shape}")
         
         all_embeddings.append(embedding)
         start_times.append(start_time)
@@ -87,6 +89,8 @@ def process_patient_files(patient_files, animal, patient_id, window_length, stri
     
     # Convert to numpy array
     embeddings_array = np.array(all_embeddings)
+    if len(embeddings_array) > 0:  # Only log for first patient
+        print(f"\nShape after combining all files: {embeddings_array.shape}")
     
     # Create output data structure
     output_data = {
@@ -107,7 +111,7 @@ def process_patient_files(patient_files, animal, patient_id, window_length, stri
         output_data['seizure_labels'] = seizure_labels
         
         # Verify seizure tagging
-        if seizure_labels is not None:
+        if seizure_labels is not None and len(embeddings_array) > 0:  # Only log for first patient
             print("\nVerification of seizure tagging:")
             print(f"Shape of seizure labels: {seizure_labels.shape}")
             labeled_windows = np.sum(seizure_labels == 1)
@@ -157,11 +161,16 @@ def main():
             return
         
         print(f"\nFound {len(patient_files)} patients to process")
+        print("\nProcessing order:")
+        for i, (patient_id, _) in enumerate(patient_files.items()):
+            print(f"{i+1}. {patient_id}")
         
         # Process each patient
         processed_files = []
-        for patient_id, files in patient_files.items():
+        for i, (patient_id, files) in enumerate(patient_files.items()):
             try:
+                if i == 0:
+                    print(f"\n=== Processing FIRST patient: {patient_id} ===")
                 output_path = process_patient_files(files, args.animal, patient_id,
                                                  args.window_length, args.stride_length,
                                                  args.data_type)
